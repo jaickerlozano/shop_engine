@@ -21,9 +21,11 @@ SECRET_KEY = env('SECRET_KEY')
 ALLOWED_HOSTS = []
 
 
-# Application definition
+# Estas son las apps que se compartirán entre todos los tenants (Esquema Público)
+SHARED_APPS = [
+    'django_tenants', # Obligatorio antes de core
+    'apps.tenants',   # Mi app que controlará los clientes del SaaS
 
-INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,7 +38,34 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 
+# Estas son las apps que cada tenant tendrá en su esquema privado (Esquema Privado)
+TENANT_APPS = [
+    # Apps nativas que requieran tablas independientes por tienda
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+
+    'django_extensions',
+    'rest_framework',
+    'corsheaders',
+    
+    # Mis apps de negocio (Esquema Privado)
+    'apps.products',
+    # 'apps.orders',
+    # 'apps.payments',
+    # 'rest_framework', # Para las APIs de cada tienda
+]
+
+# Unificamos para que Django reconozca todas las aplicaciones instaladas
+# Unificamos manteniendo el orden estricto requerido por Django y django-tenants
+INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
+
+
 MIDDLEWARE = [
+    'django_tenants.middleware.main.TenantMainMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -71,11 +100,25 @@ WSGI_APPLICATION = 'shopengine.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django_tenants.postgresql_backend',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST'),
+        'PORT': env('DB_PORT'),
     }
 }
 
+# 2. Configurar el Router de Base de Datos obligatoriamente
+DATABASE_ROUTERS = (
+    'django_tenants.routers.TenantSyncRouter',
+)
+
+# 4. Definir los modelos que usarán para los Tenants (Los crearemos en el Paso 3)
+TENANT_MODEL = "tenants.Client" # Modelo del Inquilino
+TENANT_DOMAIN_MODEL = "tenants.Domain" # Modelo del Dominio
+SHOW_PUBLIC_IF_NO_TENANT_FOUND = True # Opcional: si no se encuentra un tenant, muestra el esquema público en lugar de dar error 404
+# PUBLIC_SCHEMA_URLCONF = "shopengine.urls_public" # Opcional: si quieres tener URLs específicas para el esquema público, puedes definir un URLConf separado. Si no lo defines, usará el mismo URLConf para el esquema público y los privados.
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: shopengine_db
+    environment:
+      POSTGRES_DB: shopengine_db
+      POSTGRES_USER: shopengine_user
+      POSTGRES_PASSWORD: secret_pass_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shopengine_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shopengine_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: shopengine_backend
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG}
+      - ALLOWED_HOSTS=localhost,127.0.0.1,[::1]
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - shopengine_network
+
+  # frontend:
+  #   build: ./frontend
+  #   container_name: shopengine_frontend
+  #   command: pnpm start
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - shopengine_network
+
+volumes:
+  postgres_data:
+
+networks:
+  shopengine_network:
+    driver: bridge
